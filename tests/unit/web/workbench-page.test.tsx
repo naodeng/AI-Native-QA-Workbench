@@ -35,10 +35,12 @@ function api(): WorkbenchApi {
 
 beforeEach(() => {
   window.localStorage.clear();
+  window.history.replaceState({}, "", "/");
 });
 
 afterEach(() => {
   cleanup();
+  window.history.replaceState({}, "", "/");
 });
 
 describe("WorkbenchPage", () => {
@@ -114,5 +116,23 @@ describe("WorkbenchPage", () => {
     expect(await screen.findByText("Status: applied")).toBeTruthy();
     expect(await screen.findByText("Acceptance criteria: 1")).toBeTruthy();
     expect(client.getQuality).toHaveBeenCalledTimes(2);
+  });
+
+  it("renders the control-room shell and navigates formal workbench views", async () => {
+    window.history.replaceState({}, "", "/?view=dashboard");
+    render(<WorkbenchPage api={api()} />);
+
+    expect(await screen.findByRole("navigation", { name: "Workbench navigation" })).toBeTruthy();
+    expect(screen.getByText("Quality radar")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Pipeline" })).toBeTruthy();
+    expect(screen.queryByText("UI preview")).toBeNull();
+    expect(screen.getByRole("button", { name: "Evidence" }).getAttribute("aria-disabled")).toBe(
+      "true",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Pipeline" }));
+
+    expect(window.location.search).toBe("?view=pipeline");
+    expect(await screen.findByRole("heading", { name: "Test pipeline" })).toBeTruthy();
   });
 });

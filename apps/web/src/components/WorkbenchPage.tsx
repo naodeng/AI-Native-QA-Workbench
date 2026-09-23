@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { ProposalView, QualityView, WorkbenchApi } from "../api.js";
 import { readStoredUiLocale, storeUiLocale, translate, type UiLocale } from "../i18n.js";
-import { LocaleSwitcher } from "./LocaleSwitcher.js";
-import { ProposalReview } from "./ProposalReview.js";
+import { WorkbenchShell } from "./WorkbenchShell.js";
+import { readWorkbenchView, type WorkbenchView } from "./WorkbenchView.js";
 
 export function WorkbenchPage(props: { api: WorkbenchApi; initialUiLocale?: UiLocale }) {
   const [locale, setLocale] = useState<UiLocale>(props.initialUiLocale ?? readStoredUiLocale());
@@ -14,6 +14,7 @@ export function WorkbenchPage(props: { api: WorkbenchApi; initialUiLocale?: UiLo
   const [requirementId, setRequirementId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>();
+  const [view, setView] = useState<WorkbenchView>(readWorkbenchView);
 
   const t = useMemo(
     () => (key: Parameters<typeof translate>[1]) => translate(locale, key),
@@ -23,6 +24,15 @@ export function WorkbenchPage(props: { api: WorkbenchApi; initialUiLocale?: UiLo
   useEffect(() => {
     storeUiLocale(locale);
   }, [locale]);
+
+  useEffect(() => {
+    function handlePopState() {
+      setView(readWorkbenchView());
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -61,72 +71,32 @@ export function WorkbenchPage(props: { api: WorkbenchApi; initialUiLocale?: UiLo
     }
   }
 
-  return (
-    <main className="workbench-shell">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">{projectName || t("brand")}</p>
-          <h1>{t("title")}</h1>
-          <p>{t("subtitle")}</p>
-        </div>
-        <LocaleSwitcher locale={locale} onChange={setLocale} />
-      </header>
+  function changeView(nextView: WorkbenchView): void {
+    setView(nextView);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("variant");
+    url.searchParams.set("view", nextView);
+    window.history.replaceState({}, "", url);
+  }
 
-      {loading && <p role="status">{t("loading")}</p>}
-      {error && <p role="alert">{error}</p>}
-      {quality && (
-        <>
-          <section className="quality-overview" aria-labelledby="quality-heading">
-            <h2 id="quality-heading">{t("quality")}</h2>
-            <div className="metric-grid">
-              <p>
-                {t("requirements")}: {quality.requirements.length}
-              </p>
-              <p>
-                {t("acceptanceCriteria")}: {quality.acceptanceCriteria.length}
-              </p>
-              <p>
-                {t("qualityRisks")}: {quality.qualityRisks.length}
-              </p>
-              <p>
-                {t("testObligations")}: {quality.testObligations.length}
-              </p>
-              <p>
-                {t("testCases")}: {quality.testCases.length}
-              </p>
-              <p>
-                {t("traceLinks")}: {quality.traceLinks.length}
-              </p>
-            </div>
-          </section>
-          <section className="analysis-panel" aria-labelledby="analysis-heading">
-            <h2 id="analysis-heading">{t("analyze")}</h2>
-            <form onSubmit={analyze}>
-              <label>
-                {t("requirementId")}
-                <input
-                  aria-label={t("requirementId")}
-                  value={requirementId}
-                  onChange={(event) => setRequirementId(event.target.value)}
-                />
-              </label>
-              <label>
-                {t("outputLocale")}
-                <select
-                  aria-label={t("outputLocale")}
-                  value={outputLocale}
-                  onChange={(event) => setOutputLocale(event.target.value as UiLocale)}
-                >
-                  <option value="en">{t("english")}</option>
-                  <option value="zh-CN">{t("chinese")}</option>
-                </select>
-              </label>
-              <button type="submit">{t("analyze")}</button>
-            </form>
-          </section>
-        </>
-      )}
-      {proposal && <ProposalReview proposal={proposal} locale={locale} onDecision={decide} />}
-    </main>
+  return (
+    <WorkbenchShell
+      locale={locale}
+      projectName={projectName}
+      quality={quality}
+      proposal={proposal}
+      requirementId={requirementId}
+      outputLocale={outputLocale}
+      view={view}
+      loading={loading}
+      error={error}
+      t={t}
+      onLocaleChange={setLocale}
+      onRequirementIdChange={setRequirementId}
+      onOutputLocaleChange={setOutputLocale}
+      onAnalyze={analyze}
+      onDecision={decide}
+      onViewChange={changeView}
+    />
   );
 }
